@@ -41,7 +41,7 @@ sub get_next_trains {
     my ( $origin, $dest ) = $update->text =~ m|\b([A-Z]{3})\b.*\b([A-Z]{3})\b|;
 
     unless ( defined $origin and defined $dest ) {
-        $update->reply( "Sorry, I didn't recognise two stations there" );
+        $update->reply( "Sorry, I didn't recognise two stations there, I am looking for two three-letter CRS codes, like KGX or YRK" );
         return;
     }
 
@@ -65,7 +65,7 @@ sub get_next_trains {
             destination => $service->{locationDetail}->{destination}->[0]->{description},
             vehicle => $service->{serviceType},
             planned_arrival => $service->{locationDetail}->{gbttBookedArrival},
-            planned_departure => $service->{locationDetail}->{gbttBookedDeparture},
+            planned_departure => $service->{locationDetail}->{gbttBookedDeparture},  
             expected_arrival => $service->{locationDetail}->{realtimeArrival},
             expected_departure => $service->{locationDetail}->{realtimeDeparture},
         };
@@ -76,12 +76,12 @@ sub get_next_trains {
     my @infoblocks;
 
     for ( 0 .. 3 ) {
-        my $train = shift @trains;
+        my $train = shift @trains or last;
         my $text = $train->{planned_departure} . " to " . $train->{destination} . "\n";
 
         $text .= 
-            $train->{expected_arrival} > $train->{planned_arrival}
-                ? "Expected at " . $train->{expected_arrival} . "\n"
+            ( $train->{expected_arrival} > $train->{planned_arrival} or $train->{expected_departure} > $train->{planned_departure} )
+                ? "Expected in at " . $train->{expected_arrival} . " and out at " . $train->{expected_departure} . "\n"
                 : "Currently on time\n";
         
         $text .= "This appears to be a " . $train->{vehicle} . "\n"
@@ -92,7 +92,11 @@ sub get_next_trains {
         push @infoblocks, $text;
     }
 
-    $update->reply( "I found the following services from $origin to $dest\n\n" . join "\n", @infoblocks );
+    if ( @infoblocks ) {
+        $update->reply( "I found the following services from $origin to $dest\n\n" . join "\n", @infoblocks );
+    } else {
+        $update->reply( "I didn't find any direct services between $origin and $dest. I only understand 3 letter CRS codes, not TIPLOCs, and I cannot help you route multi-leg journeys" );
+    }
 }
 
 1;
