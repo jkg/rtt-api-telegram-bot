@@ -102,7 +102,7 @@ sub get_next_trains {
                 ( $train->{expected_arrival} > $train->{planned_arrival} or $train->{expected_departure} > $train->{planned_departure} )
                     ? "Expected in at " . $train->{expected_arrival} . " and out at " . $train->{expected_departure} . "\n"
                     : "Currently on time\n";
-        
+
             $text .= "This appears to be a " . $train->{vehicle} . "\n"
                 unless $train->{vehicle} eq 'train';
 
