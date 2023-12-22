@@ -1,5 +1,7 @@
 package App::TelegramBot::RealTimeTrains;
 
+#ABSTRACT: Simple Telegram bot that looks up UK train times / delays
+
 use Mojo::Base 'Telegram::Bot::Brain';
 
 use DateTime;
