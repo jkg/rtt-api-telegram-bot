@@ -146,6 +146,8 @@ Just send the bot a message containing the three letter CRS codes for your start
 For example: 'KGX to YRK' will request upcoming services from Kings Cross to York.
 
 The bot does not attempt to find routes involving changes; we recommend using a service like National Rail Enquiries or the ticketing staff at your local train station, for this.
+
+For more information about the bot, see https://github.com/jkg/rtt-api-telegram-bot
 EOM
 
 
