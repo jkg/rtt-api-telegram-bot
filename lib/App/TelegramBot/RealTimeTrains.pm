@@ -1,12 +1,15 @@
 package App::TelegramBot::RealTimeTrains;
 
+#ABSTRACT: Simple Telegram bot that looks up UK train times / delays
+
 use Mojo::Base 'Telegram::Bot::Brain';
 
-use Try::Tiny;
 use DateTime;
+use Mojo::CSV;
+use Try::Tiny;
 
 has [
-    qw| config token rtt_ua rtt_url |
+    qw| config token rtt_ua rtt_url stations |
 ];
 
 sub init {
@@ -26,6 +29,13 @@ sub init {
     $self->rtt_url($url);
     $self->rtt_ua( Mojo::UserAgent->new );
 
+    try {
+        my $csv = Mojo::CSV->new( in => 'data/cif_tiplocs.csv' );
+        $self->stations( $csv->slurp_body ) or die;
+    } catch {
+        warn "Couldn't read station data; falling back to not using it";
+    };
+    
     $self->add_listener( \&parse_request );
 }
 
@@ -113,6 +123,9 @@ sub get_next_trains {
         push @infoblocks, $text;
     }
 
+    $origin = $self->_crs_to_name( $origin );
+    $dest = $self->_crs_to_name( $dest );
+
     if ( @infoblocks ) {
         $update->reply( "I found the following services from $origin to $dest\n\n" . join "\n", @infoblocks );
     } else {
@@ -133,6 +146,8 @@ Just send the bot a message containing the three letter CRS codes for your start
 For example: 'KGX to YRK' will request upcoming services from Kings Cross to York.
 
 The bot does not attempt to find routes involving changes; we recommend using a service like National Rail Enquiries or the ticketing staff at your local train station, for this.
+
+For more information about the bot, see https://github.com/jkg/rtt-api-telegram-bot
 EOM
 
 
@@ -147,6 +162,19 @@ sub unimplemented {
 
     $update->reply( "Sorry, it looks like you've tried to use a command that hasn't been implemented yet! Check the /help for currently available functionality");
     return;
+}
+
+sub _crs_to_name {
+    my $self = shift;
+    my $code = shift or return;
+
+    if ( my $record = $self->stations->first( sub{
+        $_->[0] eq $code
+    })) {
+        return $record->[2];
+    } else {
+        return $code;
+    }
 }
 
 1;
