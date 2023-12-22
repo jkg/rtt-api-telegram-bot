@@ -26,12 +26,31 @@ sub init {
     $self->rtt_url($url);
     $self->rtt_ua( Mojo::UserAgent->new );
 
-    $self->add_listener( \&get_next_trains );
+    $self->add_listener( \&parse_request );
+}
+
+sub parse_request {
+
+    my ( $self, $update ) = @_;
+    my $text = $update->text or return;
+
+    if ( $text =~ m[^/(start|help)\b] ) {
+        return $self->show_help( $update );
+    }
+
+    if ( $text =~ m[^/arrivals\b] ) {
+        return $self->unimplemented( $update );
+    }
+
+    if ( $text =~ m[^/serviceinfo\b] ) {
+        return $self->unimplemented( $update );
+    }
+
+    $self->get_next_trains( $update );
+
 }
 
 sub get_next_trains {
-
-    warn "entered listener";
 
     my $self = shift;
     my $update = shift;
@@ -41,15 +60,12 @@ sub get_next_trains {
     my ( $origin, $dest ) = $update->text =~ m|\b([A-Z]{3})\b.*\b([A-Z]{3})\b|;
 
     unless ( defined $origin and defined $dest ) {
-        $update->reply( "Sorry, I didn't recognise two stations there, I am looking for two three-letter CRS codes, like KGX or YRK" );
+        $update->reply( "Sorry, I didn't recognise two stations there, you can ask me for /help if you need to." );
         return;
     }
 
     $url->path( "/api/v1/json/search/$origin/to/$dest" );
-
     my $response = $self->rtt_ua->get( $url )->result;
-
-    warn "fetched URL " . $url;
 
     if ( $response->is_error ) {
         $update->reply( "API error, soz" );
@@ -79,13 +95,18 @@ sub get_next_trains {
         my $train = shift @trains or last;
         my $text = $train->{planned_departure} . " to " . $train->{destination} . "\n";
 
-        $text .= 
-            ( $train->{expected_arrival} > $train->{planned_arrival} or $train->{expected_departure} > $train->{planned_departure} )
-                ? "Expected in at " . $train->{expected_arrival} . " and out at " . $train->{expected_departure} . "\n"
-                : "Currently on time\n";
-        
-        $text .= "This appears to be a " . $train->{vehicle} . "\n"
-            unless $train->{vehicle} eq 'train';
+        {
+            no warnings 'uninitialized';
+
+            $text .= 
+                ( $train->{expected_arrival} > $train->{planned_arrival} or $train->{expected_departure} > $train->{planned_departure} )
+                    ? "Expected in at " . $train->{expected_arrival} . " and out at " . $train->{expected_departure} . "\n"
+                    : "Currently on time\n";
+
+            $text .= "This appears to be a " . $train->{vehicle} . "\n"
+                unless $train->{vehicle} eq 'train';
+
+        }
 
         $text .= "https://www.realtimetrains.co.uk/service/gb-nr:" . $train->{uid} . "/" . DateTime->now->ymd . "\n";
 
@@ -95,8 +116,37 @@ sub get_next_trains {
     if ( @infoblocks ) {
         $update->reply( "I found the following services from $origin to $dest\n\n" . join "\n", @infoblocks );
     } else {
-        $update->reply( "I didn't find any direct services between $origin and $dest. I only understand 3 letter CRS codes, not TIPLOCs, and I cannot help you route multi-leg journeys" );
+        $update->reply( "I didn't find any direct services between $origin and $dest today. I can only handle direct journeys, not multi-leg routing. See /help for more information." );
     }
+}
+
+sub show_help {
+
+    my $self = shift;
+    my $update = shift or return;
+
+    my $help = <<'EOM';
+This bot can help you to find the next few trains between points A and B, and whether they're currently delayed.
+
+Just send the bot a message containing the three letter CRS codes for your start and end points, and it will attempt to find the next 4 direct services, today.
+
+For example: 'KGX to YRK' will request upcoming services from Kings Cross to York.
+
+The bot does not attempt to find routes involving changes; we recommend using a service like National Rail Enquiries or the ticketing staff at your local train station, for this.
+EOM
+
+
+    $update->reply( $help );
+
+
+}
+
+sub unimplemented {
+    my $self = shift;
+    my $update = shift or return;
+
+    $update->reply( "Sorry, it looks like you've tried to use a command that hasn't been implemented yet! Check the /help for currently available functionality");
+    return;
 }
 
 1;
