@@ -74,36 +74,26 @@ sub get_next_trains {
         return;
     }
 
-    $url->path( "/api/v1/json/search/$origin/to/$dest" );
-    my $response = $self->rtt_ua->get( $url )->result;
+    my @trains = $self->_fetch_services( $origin, $dest )->@*;
 
-    if ( $response->is_error ) {
-        $update->reply( "API error, soz" );
-        return;
+    if ( @trains < 4 ) {
+        @trains = ( @trains, $self->_fetch_services( $origin, $dest, DateTime->now->add( days => 1 ) )->@* );
     }
-
-    my @trains;
-    my $data = $response->json;
-    for my $service ( $data->{services}->@* ) {
-        push @trains, {
-            uid => $service->{serviceUid},
-            origin => $service->{locationDetail}->{origin}->[0]->{description},
-            destination => $service->{locationDetail}->{destination}->[0]->{description},
-            vehicle => $service->{serviceType},
-            planned_arrival => $service->{locationDetail}->{gbttBookedArrival},
-            planned_departure => $service->{locationDetail}->{gbttBookedDeparture},  
-            expected_arrival => $service->{locationDetail}->{realtimeArrival},
-            expected_departure => $service->{locationDetail}->{realtimeDeparture},
-        };
-    }
-
-    @trains = sort { $a->{planned_departure} <=> $b->{planned_departure} } @trains;
 
     my @infoblocks;
 
+    my $tomorrow = 0;
+
     for ( 0 .. 3 ) {
         my $train = shift @trains or last;
-        my $text = $train->{planned_departure} . " to " . $train->{destination} . "\n";
+
+        my $text = "";
+        unless ( $train->{is_today} or $tomorrow ) {
+            $text .= "SERVICES TOMORROW:\n\n";
+            $tomorrow = 1;
+        }
+
+        $text .= $train->{planned_departure} . " to " . $train->{destination} . "\n";
 
         {
             no warnings 'uninitialized';
@@ -118,7 +108,7 @@ sub get_next_trains {
 
         }
 
-        $text .= "https://www.realtimetrains.co.uk/service/gb-nr:" . $train->{uid} . "/" . DateTime->now->ymd . "\n";
+        $text .= "https://www.realtimetrains.co.uk/service/gb-nr:" . $train->{uid} . "/" . $train->{run_date} . "\n";
 
         push @infoblocks, $text;
     }
@@ -164,6 +154,7 @@ sub unimplemented {
     return;
 }
 
+
 sub _crs_to_name {
     my $self = shift;
     my $code = shift or return;
@@ -175,6 +166,47 @@ sub _crs_to_name {
     } else {
         return $code;
     }
+}
+
+sub _fetch_services {
+
+    my ( $self, $origin, $dest, $dt ) = @_;
+
+    if ( $origin and $dest ) {
+
+        my $path = "/api/v1/json/search/$origin/to/$dest";
+
+        if ( defined $dt ) {
+            $path .= '/' . $dt->ymd('/');
+        }
+
+        my $url = $self->rtt_url;
+        $url->path( $path );
+        my $response = $self->rtt_ua->get( $url )->result;#
+
+        return () if $response->is_error;
+
+        my @trains;
+        my $data = $response->json;
+        for my $service ( $data->{services}->@* ) {
+            push @trains, {
+                uid => $service->{serviceUid},
+                origin => $service->{locationDetail}->{origin}->[0]->{description},
+                destination => $service->{locationDetail}->{destination}->[0]->{description},
+                vehicle => $service->{serviceType},
+                planned_arrival => $service->{locationDetail}->{gbttBookedArrival},
+                planned_departure => $service->{locationDetail}->{gbttBookedDeparture},  
+                expected_arrival => $service->{locationDetail}->{realtimeArrival},
+                expected_departure => $service->{locationDetail}->{realtimeDeparture},
+                is_today => $service->{runDate} eq DateTime->now->ymd ? 1 : 0,
+                run_date => $service->{runDate},
+            };
+        }
+
+        return \@trains;
+
+    }
+
 }
 
 1;
