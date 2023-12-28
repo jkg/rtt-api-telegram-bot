@@ -9,17 +9,17 @@ use Mojo::CSV;
 use Try::Tiny;
 
 has [
-    qw| config token rtt_ua rtt_url stations |
+    qw| config token rtt_ua rtt_url stations logger userstore |
 ];
 
 sub init {
     my $self = shift;
 
     my $config = $self->config
-        or die "Can't initiate bot without a config, try again";
+        or $self->bail_out( "Can't initiate bot without a config, try again" );
 
     $self->token($config->get('botfather_token'))
-        or die  "Can't initiate bot without a botfather token, update your config and try again";
+        or $self->bail_out( "Can't initiate bot without a botfather token, update your config and try again" );
 
     my $creds = join ":", $config->get('rtt_username'), $config->get('rtt_token');
 
@@ -33,15 +33,33 @@ sub init {
         my $csv = Mojo::CSV->new( in => 'data/cif_tiplocs.csv' );
         $self->stations( $csv->slurp_body ) or die;
     } catch {
-        warn "Couldn't read station data; falling back to not using it";
+        $self->logger->warning( "Couldn't read station data; falling back to not using it" );
     };
     
+    $self->logger( App::TelegramBot::RealTimeTrains::Logger->log_init( $self ) )
+        unless defined $self->logger;
+
+    $self->logger( App::TelegramBot::RealTimeTrains::UserStore->user_init( $self ) )
+        unless defined $self->userstore;
+
     $self->add_listener( \&parse_request );
 }
 
 sub parse_request {
 
     my ( $self, $update ) = @_;
+
+    try {
+        if ( my $limit = $self->config->get('rate_limit')) {
+            if ( $self->schema->resultset('User')->seen_user( $update->from->id ) > $limit ) {
+                $self->logger->notice( "User ID " . $update->from->id . " was rate-limited" );
+                $update->reply( "Cooldown in progress, please come back later" );
+            }
+        }
+    } catch {
+        $self->logger->debug( "Failed to do ratelimiting checks, continuing for now" );
+    };
+
     my $text = $update->text or return;
 
     if ( $text =~ m[^/(start|help)\b] ) {
@@ -189,6 +207,9 @@ sub _fetch_services {
 
         my $url = $self->rtt_url;
         $url->path( $path );
+
+        $self->logger->debug( $url );
+
         my $response = $self->rtt_ua->get( $url )->result;#
 
         return () if $response->is_error;
@@ -214,6 +235,12 @@ sub _fetch_services {
 
     }
 
+}
+
+sub _bail_out {
+    my $self = shift;
+    $self->logger->critical( shift );
+    die;
 }
 
 1;
