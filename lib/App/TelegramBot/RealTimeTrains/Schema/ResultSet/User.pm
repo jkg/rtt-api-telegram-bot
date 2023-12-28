@@ -19,7 +19,7 @@ sub seen_user {
 
 sub reduce_counters {
     my $self = shift;
-    my $counted_users = $self->search_rs( activity_counter > 0 );
+    my $counted_users = $self->search_rs( { activity_counter => { '>', 0 } } );
 
     while ( my $user = $counted_users->next ) {
         $user->activity_counter( $user->activity_counter - 1 );

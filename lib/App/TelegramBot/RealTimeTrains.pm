@@ -8,8 +8,11 @@ use DateTime;
 use Mojo::CSV;
 use Try::Tiny;
 
+use App::TelegramBot::RealTimeTrains::Logger;
+use App::TelegramBot::RealTimeTrains::Schema;
+
 has [
-    qw| config token rtt_ua rtt_url stations logger userstore |
+    qw| config token rtt_ua rtt_url stations logger schema |
 ];
 
 sub init {
@@ -39,8 +42,8 @@ sub init {
     $self->logger( App::TelegramBot::RealTimeTrains::Logger->log_init( $self ) )
         unless defined $self->logger;
 
-    $self->logger( App::TelegramBot::RealTimeTrains::UserStore->user_init( $self ) )
-        unless defined $self->userstore;
+    $self->schema( App::TelegramBot::RealTimeTrains::Schema->connect( 'dbi:SQLite:bot.db' ) )
+        or $self->_bail_out( "Couldn't open user database" );
 
     $self->add_listener( \&parse_request );
 }
