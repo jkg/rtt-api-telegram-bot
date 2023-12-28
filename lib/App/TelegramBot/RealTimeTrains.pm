@@ -49,11 +49,11 @@ sub parse_request {
     }
 
     if ( $text =~ m[^/arrivals\b] ) {
-        return $self->unimplemented( $update );
+        return $self->arrivals( $update );
     }
 
     if ( $text =~ m[^/serviceinfo\b] ) {
-        return $self->unimplemented( $update );
+        return $self->serviceinfo( $update );
     }
 
     $self->get_next_trains( $update );
@@ -154,6 +154,13 @@ sub unimplemented {
     return;
 }
 
+sub arrivals {
+    shift->unimplemented;
+}
+
+sub serviceinfo {
+    shift->unimplemented;
+}
 
 sub _crs_to_name {
     my $self = shift;
