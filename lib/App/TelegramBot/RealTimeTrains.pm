@@ -39,13 +39,18 @@ sub init {
         $self->logger->warning( "Couldn't read station data; falling back to not using it" );
     };
     
-    $self->logger( App::TelegramBot::RealTimeTrains::Logger->log_init( $self ) )
+    App::TelegramBot::RealTimeTrains::Logger->log_init( $self )
         unless defined $self->logger;
 
     $self->schema( App::TelegramBot::RealTimeTrains::Schema->connect( 'dbi:SQLite:bot.db' ) )
         or $self->_bail_out( "Couldn't open user database" );
 
     $self->add_listener( \&parse_request );
+
+    $self->add_repeating_task(
+        $self->config->get('ratelimit_count_interval') // 60,
+        $self->schema->resultset('User')->reduce_counters( $self->config->get('ratelimit_count_value') )
+    );
 }
 
 sub parse_request {
@@ -53,7 +58,7 @@ sub parse_request {
     my ( $self, $update ) = @_;
 
     try {
-        if ( my $limit = $self->config->get('rate_limit')) {
+        if ( my $limit = $self->config->get('ratelimit_maximum')) {
             if ( $self->schema->resultset('User')->seen_user( $update->from->id ) > $limit ) {
                 $self->logger->notice( "User ID " . $update->from->id . " was rate-limited" );
                 $update->reply( "Cooldown in progress, please come back later" );

@@ -6,9 +6,10 @@ use warnings;
 use base 'DBIx::Class::ResultSet';
 
 sub seen_user {
+
     my $self = shift;
     my $tg_id = shift;
-    my $user = $self->find_or_create( $tg_id );
+    my $user = $self->find_or_create({ telegram_id => $tg_id });
 
     $user->last_seen_epoch( DateTime->now->epoch );
     $user->activity_counter( $user->activity_counter + 1 );
@@ -18,11 +19,13 @@ sub seen_user {
 }
 
 sub reduce_counters {
+
     my $self = shift;
+    my $reduce_by = shift || 1;
     my $counted_users = $self->search_rs( { activity_counter => { '>', 0 } } );
 
     while ( my $user = $counted_users->next ) {
-        $user->activity_counter( $user->activity_counter - 1 );
+        $user->activity_counter( $user->activity_counter - $reduce_by );
         $user->update;
     }
 

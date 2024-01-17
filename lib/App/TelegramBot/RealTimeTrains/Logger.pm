@@ -1,6 +1,8 @@
 package App::TelegramBot::RealTimeTrains::Logger;
 
 use Log::Dispatch;
+use Log::Dispatch::File;
+use Log::Dispatch::Screen;
 
 sub log_init {
     my $class = shift;
@@ -11,7 +13,7 @@ sub log_init {
     $logger->add(
         Log::Dispatch::File->new(
             filename => $bot->config->get('logfile') // 'botlog',
-            minlevel => $bot->config->get('loglevel') // 'warning',
+            min_level => $bot->config->get('loglevel') // 'warning',
             name => 'mainlog',
         )
     );
@@ -20,7 +22,7 @@ sub log_init {
         $logger->add( 
             Log::Dispatch::Screen->new(
                 name => 'debuglog',
-                minlevel => 'debug',
+                min_level => 'debug',
             )
         );
     }

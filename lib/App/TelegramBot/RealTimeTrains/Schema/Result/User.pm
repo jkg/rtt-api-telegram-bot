@@ -68,5 +68,21 @@ __PACKAGE__->set_primary_key("telegram_id");
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2023-12-28 14:47:33
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:E4RhqlQicx5gVfg6qoj7jA
 
+sub seen_user {
+    my $self = shift;
+    my $tg_id = shift;
+
+    my $user_record = $self->schema->resultset('User')
+        ->find_or_create( $tg_id );
+    $user_record->last_seen_epoch( DateTime->now->epoch );
+    return $user_record->activity_counter( $user_record->activity_counter + 1 );
+}
+
+sub reduce_counters {
+    my $self = shift;
+
+
+}
+
 # You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;
