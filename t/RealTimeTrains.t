@@ -6,11 +6,15 @@ use DateTime;
 use Test::MockDateTime;
 
 use Mojo::UserAgent::Mockable;
+use Test::Log::Dispatch;
 
 my $mock_bot = mock 'App::TelegramBot::RealTimeTrains' => (
     track    => 1,
     override => [
-        init  => sub {return},
+        init  => sub {
+            my $self = shift;
+            $self->logger( Test::Log::Dispatch->new() );
+        },
     ]
 );
 
@@ -28,7 +32,7 @@ subtest 'sanity check' => sub {
 
 subtest 'utilities' => sub {
 
-    my $bot = $CLASS->new();
+    my $bot = $CLASS->new->init;
 
     $bot->rtt_ua( Mojo::UserAgent::Mockable->new(
         file => 't/etc/playback.save',
@@ -51,6 +55,7 @@ subtest 'utilities' => sub {
         on '2024-02-06 12:34:56' => sub {
             $trains = $bot->_fetch_services( 'KGX', 'YRK', DateTime->now );
             is scalar @$trains, 44, "Found 44 services";
+            $bot->logger->contains_ok( qr|KGX/to/YRK|, "URL seems reasonable" );
             is $trains->[0]->{destination}, 'Edinburgh', "Looks like we found the correct service";
 
             $trains = $bot->_fetch_services( 'XNP', 'YRK', DateTime->new( year => 2024, month => 12, day => 31 ) );
@@ -84,7 +89,7 @@ subtest 'message handling' => sub {
             }
         );
 
-        my $bot = $CLASS->new();
+        my $bot = $CLASS->new()->init();
         my $msg = Telegram::Bot::Object::Message->new();
 
         $bot->parse_request( $msg->text('something') );
