@@ -42,20 +42,27 @@ sub init {
     App::TelegramBot::RealTimeTrains::Logger->log_init( $self )
         unless defined $self->logger;
 
-    $self->schema( App::TelegramBot::RealTimeTrains::Schema->connect( 'dbi:SQLite:bot.db' ) )
-        or $self->_bail_out( "Couldn't open user database" );
+    unless ( $self->schema ) {
+        try {
+            $self->schema( App::TelegramBot::RealTimeTrains::Schema->connect( 'dbi:SQLite:bot.db' ) );
+        } catch {
+            $self->_bail_out( "Couldn't connect to database: $_" );
+        };
+    }
 
     $self->add_listener( \&parse_request );
 
     $self->add_repeating_task(
         $self->config->get('ratelimit_count_interval') // 60,
-        $self->schema->resultset('User')->reduce_counters( $self->config->get('ratelimit_count_value') )
+        \&_reduce_counters
     );
 }
 
 sub parse_request {
 
     my ( $self, $update ) = @_;
+
+use DDP; p $update;
 
     try {
         if ( my $limit = $self->config->get('ratelimit_maximum')) {
@@ -249,6 +256,11 @@ sub _bail_out {
     my $self = shift;
     $self->logger->critical( shift );
     die;
+}
+
+sub _reduce_counters {
+    my $self = shift;
+    $self->schema->resultset('User')->reduce_counters( $self->config->get('ratelimit_count_value') );
 }
 
 1;
