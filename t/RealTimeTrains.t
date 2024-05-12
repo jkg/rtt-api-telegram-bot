@@ -61,6 +61,12 @@ subtest 'utilities' => sub {
             $trains = $bot->_fetch_services( 'XNP', 'YRK', DateTime->new( year => 2024, month => 12, day => 31 ) );
             is scalar @$trains, 0, "Found no trains from the North Pole";
         };
+    };
+
+    subtest 'station search' => sub {
+        like $bot->_find_crs_by_name( "e" ), 2, "Found both cities with a single letter, despite case";
+        like $bot->_find_crs_by_name( "q" ), 0, "Found no cities with a q, natch";
+        like $bot->_find_crs_by_name( "g" ), 1, "Only found one city with a g in the name";
     }
 
 };

@@ -62,8 +62,6 @@ sub parse_request {
 
     my ( $self, $update ) = @_;
 
-use DDP; p $update;
-
     try {
         if ( my $limit = $self->config->get('ratelimit_maximum')) {
             if ( $self->schema->resultset('User')->seen_user( $update->from->id ) > $limit ) {
@@ -83,6 +81,10 @@ use DDP; p $update;
 
     if ( $text =~ m[^/arrivals\b] ) {
         return $self->arrivals( $update );
+    }
+
+    if ( $text =~ m[^/findcode\b] ) {
+        return $self->findcode( $update );
     }
 
     if ( $text =~ m[^/serviceinfo\b] ) {
@@ -187,6 +189,23 @@ sub unimplemented {
     return;
 }
 
+sub findcode {
+    my $self = shift;
+    my $update = shift or return;
+
+    my $query = $update->text =~ s[^/findcode\s+][];
+
+    my @candidates = $self->_find_crs_by_name( $query );
+
+    if ( @candidates > 20 ) {
+        $update->reply( "Sorry, that string matched far too many stations, can you be more specific?" );
+    } elsif ( @candidates > 0 ) {
+        $update->reply( "Did you mean one of these stations?\n\n" . join "\n", @candidates );
+    } else {
+        $update->reply( "Sorry, I don't know about any stations called $query" );
+    }
+}
+
 sub arrivals {
     shift->unimplemented;
 }
@@ -206,6 +225,19 @@ sub _crs_to_name {
     } else {
         return $code;
     }
+}
+
+sub _find_crs_by_name {
+    my $self = shift;
+    my $query = shift;
+
+    my @stations = @{$self->stations};
+    my @candidates = 
+        map { $_->[2] . ": " . $_->[0] }
+        grep { $_->[2] =~ qr/$query/i }
+        @{$self->stations};
+
+    return @candidates;
 }
 
 sub _fetch_services {
