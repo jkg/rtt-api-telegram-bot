@@ -193,7 +193,7 @@ sub findcode {
     my $self = shift;
     my $update = shift or return;
 
-    my $query = $update->text =~ s[^/findcode\s+][];
+    my ( $query ) = $update->text =~ m|^/findcode\s+(.+)|;
 
     my @candidates = $self->_find_crs_by_name( $query );
 
