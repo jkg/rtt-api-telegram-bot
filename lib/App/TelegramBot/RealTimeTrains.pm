@@ -61,9 +61,7 @@ sub init {
 sub parse_request {
 
     my ( $self, $update ) = @_;
-
-use DDP; p $update;
-
+    
     try {
         if ( my $limit = $self->config->get('ratelimit_maximum')) {
             if ( $self->schema->resultset('User')->seen_user( $update->from->id ) > $limit ) {
