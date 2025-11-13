@@ -195,7 +195,7 @@ sub serviceinfo {
 
 sub _crs_to_name {
     my $self = shift;
-    my $code = shift or return;
+    my $code = uc(shift) or return;
 
     if ( my $record = $self->stations->first( sub{
         $_->[0] eq $code
