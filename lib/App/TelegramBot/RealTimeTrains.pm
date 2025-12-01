@@ -7,6 +7,7 @@ use Mojo::Base 'Telegram::Bot::Brain';
 use DateTime;
 use Mojo::CSV;
 use Try::Tiny;
+use List::Util qw| first |;
 
 use App::TelegramBot::RealTimeTrains::Logger;
 use App::TelegramBot::RealTimeTrains::Schema;
@@ -124,9 +125,16 @@ sub get_next_trains {
             $tomorrow = 1;
         }
 
-        $text .= $train->{planned_departure} . " to " . $train->{destination} . "\n";
+        $text .= $train->{planned_departure} . " to " . $train->{destination};
+        $text .= ( $train->{platform_changed} )
+            ? ( $train->{platform} ) ? " at platform " . $train->{platform} . " (unplanned)" : ", possible platform change"
+            : ( $train->{platform} ) ? " from platform " . $train->{platform} : "";
+        $text .= "\n";
 
-        {
+
+        if ( defined $train->{cancelled_message} ) {
+                $text .= $train->{cancelled_message} . "\n";
+        } else {
             no warnings 'uninitialized';
 
             $text .= 
@@ -134,10 +142,19 @@ sub get_next_trains {
                     ? "Expected in at " . $train->{expected_arrival} . " and out at " . $train->{expected_departure} . "\n"
                     : "Currently on time\n";
 
+            if ( defined $train->{expected_arrival_dest} ) {
+                $text .= "ETA at $dest: " . $train->{expected_arrival_dest} 
+                    . ", planned as " . $train->{planned_arrival_dest}
+                    .  "\n";
+            } else {
+                $text .= "ETA at $dest: " . $train->{planned_arrival_dest} . "\n";
+            }
+
             $text .= "This appears to be a " . $train->{vehicle} . "\n"
                 unless $train->{vehicle} eq 'train';
 
         }
+
 
         $text .= "https://www.realtimetrains.co.uk/service/gb-nr:" . $train->{uid} . "/" . $train->{run_date} . "\n";
 
@@ -212,6 +229,9 @@ sub _fetch_services {
 
     if ( $origin and $dest ) {
 
+        $origin = uc $origin;
+        $dest = uc $dest;
+
         my $path = "/api/v1/json/search/$origin/to/$dest";
 
         if ( defined $dt ) {
@@ -223,13 +243,35 @@ sub _fetch_services {
 
         $self->logger->debug( $url );
 
-        my $response = $self->rtt_ua->get( $url )->result;#
+        my $response = $self->rtt_ua->get( $url )->result;
 
         return () if $response->is_error;
 
         my @trains;
         my $data = $response->json;
+
+        return [] unless defined $data->{services};
+
         for my $service ( $data->{services}->@* ) {
+
+            my $serviceData = $self->_fetch_service_data( $service->{serviceUid}, $dt );
+
+            next unless defined $serviceData->{locations};
+            my @locations = $serviceData->{locations}->@*;
+
+            my $call_from = first { defined $_->{crs} && $_->{crs} eq $origin } @locations;
+            my $call_to = first { defined $_->{crs} && $_->{crs} eq $dest } @locations;
+
+            my $cancelled_message;
+            if ( defined $call_from->{cancelReasonCode} ) {
+                $cancelled_message = "CANCELLED at/before $origin: " . $call_from->{cancelReasonShortText} // "Unknown Reason";
+            } elsif ( $call_to->{cancelReasonCode} ) {
+                my $last_stop = first { $_->{crs} and !defined $_->{cancelReasonCode} } @locations;
+                if ( defined $last_stop ) { 
+                    $cancelled_message = "CANCELLED after " . $self->_crs_to_name( $last_stop->{crs} ) . "\n";
+                }
+            }
+
             push @trains, {
                 uid => $service->{serviceUid},
                 origin => $service->{locationDetail}->{origin}->[0]->{description},
@@ -239,14 +281,40 @@ sub _fetch_services {
                 planned_departure => $service->{locationDetail}->{gbttBookedDeparture},  
                 expected_arrival => $service->{locationDetail}->{realtimeArrival},
                 expected_departure => $service->{locationDetail}->{realtimeDeparture},
+                expected_arrival_dest => $call_to->{realTimeArrival},
+                planned_arrival_dest => $call_to->{gbttBookedArrival},
                 is_today => $service->{runDate} eq DateTime->now->ymd ? 1 : 0,
                 run_date => $service->{runDate},
+                cancelled_message => $cancelled_message,
+                platform_changed => $call_from->{platformChanged},
+                platform => $call_from->{platform},
             };
+
+            last if @trains >= 4;
         }
 
         return \@trains;
 
     }
+
+}
+
+sub _fetch_service_data {
+
+    my $self = shift;
+    my $uid = shift;
+    my $dt = shift // DateTime->now;
+
+    my $path = "/api/v1/json/service/$uid/" . $dt->ymd('/');
+ 
+    my $url = $self->rtt_url;
+    $url->path( $path );
+    $self->logger->debug( "$url\n" );
+    
+    my $response = $self->rtt_ua->get( $url )->result;
+
+    return if $response->is_error;
+    return $response->json;
 
 }
 
