@@ -249,10 +249,14 @@ sub _fetch_services {
 
         my @trains;
         my $data = $response->json;
+
+        return [] unless defined $data->{services};
+
         for my $service ( $data->{services}->@* ) {
 
             my $serviceData = $self->_fetch_service_data( $service->{serviceUid}, $dt );
 
+            next unless defined $serviceData->{locations};
             my @locations = $serviceData->{locations}->@*;
 
             my $call_from = first { defined $_->{crs} && $_->{crs} eq $origin } @locations;
@@ -285,6 +289,8 @@ sub _fetch_services {
                 platform_changed => $call_from->{platformChanged},
                 platform => $call_from->{platform},
             };
+
+            last if @trains >= 4;
         }
 
         return \@trains;
@@ -303,7 +309,7 @@ sub _fetch_service_data {
  
     my $url = $self->rtt_url;
     $url->path( $path );
-    $self->logger->debug( $url );
+    $self->logger->debug( "$url\n" );
     
     my $response = $self->rtt_ua->get( $url )->result;
 
