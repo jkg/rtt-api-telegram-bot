@@ -100,6 +100,8 @@ sub get_next_trains {
     my $url = $self->rtt_url->clone;
 
     my ( $origin, $dest ) = $update->text =~ m|\b([A-Z]{3})\b.*\b([A-Z]{3})\b|i;
+    $origin = uc $origin;
+    $dest = uc $dest;
 
     unless ( defined $origin and defined $dest ) {
         $update->reply( "Sorry, I didn't recognise two stations there, you can ask me for /help if you need to." );
@@ -228,9 +230,6 @@ sub _fetch_services {
     my ( $self, $origin, $dest, $dt ) = @_;
 
     if ( $origin and $dest ) {
-
-        $origin = uc $origin;
-        $dest = uc $dest;
 
         my $path = "/api/v1/json/search/$origin/to/$dest";
 
