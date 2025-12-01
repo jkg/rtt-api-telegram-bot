@@ -136,27 +136,26 @@ sub get_next_trains {
 
         if ( defined $train->{cancelled_message} ) {
                 $text .= $train->{cancelled_message} . "\n";
-        } else {
-            no warnings 'uninitialized';
-
+                $text .= "Check link below or station information boards for more information\n";
+        }
+        
+        {
+            no warnings "uninitialized";
             $text .= 
                 ( $train->{expected_arrival} > $train->{planned_arrival} or $train->{expected_departure} > $train->{planned_departure} )
                     ? "Expected in at " . $train->{expected_arrival} . " and out at " . $train->{expected_departure} . "\n"
                     : "Currently on time\n";
-
-            if ( defined $train->{expected_arrival_dest} ) {
-                $text .= "ETA at $dest: " . $train->{expected_arrival_dest} 
-                    . ", planned as " . $train->{planned_arrival_dest}
-                    .  "\n";
-            } else {
-                $text .= "ETA at $dest: " . $train->{planned_arrival_dest} . "\n";
-            }
-
-            $text .= "This appears to be a " . $train->{vehicle} . "\n"
-                unless $train->{vehicle} eq 'train';
-
         }
 
+        if ( defined $train->{expected_arrival_dest} ) {
+            $text .= "ETA at $dest: " . $train->{expected_arrival_dest} 
+                . ", planned as " . $train->{planned_arrival_dest}
+                .  "\n";
+        } else {
+            $text .= "ETA at $dest: " . $train->{planned_arrival_dest} . "\n";
+        }
+        $text .= "This appears to be a " . $train->{vehicle} . "\n"
+                unless $train->{vehicle} eq 'train';
 
         $text .= "https://www.realtimetrains.co.uk/service/gb-nr:" . $train->{uid} . "/" . $train->{run_date} . "\n";
 
